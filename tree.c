@@ -8,14 +8,15 @@
 //
 // Example single entry (conceptual):
 //   "100644 hello.txt\0" followed by 32 raw bytes of SHA-256
-
+#include "index.h"
 #include "tree.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
+#include "pes.h"
 #include <sys/stat.h>
-
+int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
 // ─── Mode Constants ─────────────────────────────────────────────────────────
 
 #define MODE_FILE      0100644
@@ -130,8 +131,31 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 //
 // Returns 0 on success, -1 on error.
 int tree_from_index(ObjectID *id_out) {
-    // TODO: Implement recursive tree building
-    // (See Lab Appendix for logical steps)
-    (void)id_out;
-    return -1;
+    Index idx;
+
+    // Step 1: Load index
+    if (index_load(&idx) != 0) return -1;
+
+    // Step 2: Build tree content buffer
+    char buffer[8192];
+    size_t offset = 0;
+
+    for (size_t i = 0; i < idx.count; i++) {
+        IndexEntry *e = &idx.entries[i];
+
+        char hash_hex[HASH_HEX_SIZE + 1];
+	hash_to_hex(&e->hash, hash_hex);
+        // Format: "<mode> blob <hash> <name>\n"
+        offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                           "%o blob %s %s\n",
+                           e->mode,
+                           hash_hex,
+                           e->path);
+    }
+
+    // Step 3: Write tree object
+    if (object_write(OBJ_TREE, buffer, offset, id_out) != 0)
+        return -1;
+
+    return 0;
 }
