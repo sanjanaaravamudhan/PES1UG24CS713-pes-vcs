@@ -193,9 +193,55 @@ int head_update(const ObjectID *new_commit) {
 //   - head_update       : moves the branch pointer to your new commit
 //
 // Returns 0 on success, -1 on error.
-int commit_create(const char *message, ObjectID *commit_id_out) {
     // TODO: Implement commit creation
     // (See Lab Appendix for logical steps)
-    (void)message; (void)commit_id_out;
-    return -1;
+int commit_create(const char *message, ObjectID *id_out) {
+    ObjectID tree_id;
+
+    // Step 1: Build tree from index
+    if (tree_from_index(&tree_id) != 0) return -1;
+
+    // Step 2: Read parent (if exists)
+    ObjectID parent_id;
+    int has_parent = (head_read(&parent_id) == 0);
+
+    // Step 3: Get author
+    const char *author = pes_author();
+
+    // Step 4: Build commit content
+    char buffer[4096];
+    char tree_hex[HASH_HEX_SIZE + 1];
+    hash_to_hex(&tree_id, tree_hex);
+
+    int offset = 0;
+
+    offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                       "tree %s\n", tree_hex);
+
+    if (has_parent) {
+        char parent_hex[HASH_HEX_SIZE + 1];
+        hash_to_hex(&parent_id, parent_hex);
+
+        offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                           "parent %s\n", parent_hex);
+    }
+
+    offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                       "author %s\n", author);
+
+    offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                       "committer %s\n\n", author);
+
+    offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                       "%s\n", message);
+
+    // Step 5: Write commit object
+    if (object_write(OBJ_COMMIT, buffer, offset, id_out) != 0)
+        return -1;
+
+    // Step 6: Update HEAD
+    if (head_update(id_out) != 0)
+        return -1;
+
+    return 0;
 }
